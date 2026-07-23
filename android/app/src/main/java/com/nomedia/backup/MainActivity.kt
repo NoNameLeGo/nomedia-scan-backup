@@ -193,6 +193,68 @@ private fun AppScreen() {
         }
     }
 
+    // ---- 底层原语：可独立操控，不绑定“备份模式”开关 ----
+
+    /** 移出 .nomedia：文件夹变可见，但图片还没进相册，需再点“触发系统扫描”。 */
+    fun moveOutNomedia() {
+        val uri = treeUri ?: return
+        busy = true; message = ""
+        scope.launch {
+            phase = "正在移出 .nomedia …"
+            val ok = withContext(Dispatchers.IO) { manager.moveOut(uri) }
+            busy = false
+            status = manager.status(uri)
+            if (ok) message = "已移出 .nomedia：文件夹现在可见。点【触发系统扫描】让图片进入相册。"
+            else message = "移出 .nomedia 失败，请检查文件夹授权。"
+            refresh()
+        }
+    }
+
+    /** 恢复 .nomedia：文件夹重新隐藏，但图片仍在相册，需再点“触发系统扫描”把它们移出。 */
+    fun moveInNomedia() {
+        val uri = treeUri ?: return
+        busy = true; message = ""
+        scope.launch {
+            phase = "正在恢复 .nomedia …"
+            val ok = withContext(Dispatchers.IO) { manager.moveIn(uri) }
+            busy = false
+            status = manager.status(uri)
+            if (ok) message = "已恢复 .nomedia：文件夹已隐藏。点【触发系统扫描】把图片移出相册。"
+            else message = "恢复 .nomedia 失败。"
+            refresh()
+        }
+    }
+
+    /** 直接创建一个全新的 .nomedia（强制隐藏），不经过 .bak 还原。 */
+    fun createNomediaNow() {
+        val uri = treeUri ?: return
+        busy = true; message = ""
+        scope.launch {
+            phase = "正在创建 .nomedia …"
+            val ok = withContext(Dispatchers.IO) { manager.createNomedia(uri) }
+            busy = false
+            status = manager.status(uri)
+            if (ok) message = "已创建 .nomedia（强制隐藏）。点【触发系统扫描】让图片移出相册。"
+            else message = "创建 .nomedia 失败。"
+            refresh()
+        }
+    }
+
+    /** 仅触发系统扫描（不改动 .nomedia）。图片是否“进/出相册”取决于当前 .nomedia 状态。 */
+    fun triggerScan() {
+        val path = folderPath
+        if (path == null) { message = "无法解析真实路径，无法扫描（可能在 SD 卡或特殊目录）。"; return }
+        busy = true; message = ""
+        val poller = pollCountWhile { busy }
+        scope.launch {
+            phase = "系统正在扫描文件夹（大文件夹可能需几十分钟，可切后台等待）…"
+            withContext(Dispatchers.IO) { scanner.scanDirectory(path) }
+            busy = false; poller.cancel()
+            refresh()
+            message = "系统扫描完成。"
+        }
+    }
+
     val scroll = rememberScrollState()
     Scaffold(
         topBar = { TopAppBar(title = { Text("扫库备份助手") }) }
@@ -225,6 +287,7 @@ private fun AppScreen() {
                     }
                 }
 
+                Text("便捷模式（一键组合底层操作）", style = MaterialTheme.typography.labelLarge)
                 ActionCard(
                     title = "① 进入备份模式",
                     subtitle = "移走 .nomedia → 触发扫描，图片进入系统相册",
@@ -265,10 +328,26 @@ private fun AppScreen() {
                 }
 
                 Divider()
-                Text("辅助工具", style = MaterialTheme.typography.labelLarge)
+                Text("手动操控（底层原语，可独立执行）", style = MaterialTheme.typography.labelLarge)
+                OutlinedButton(onClick = { moveOutNomedia() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Visibility, null); Spacer(Modifier.width(8.dp))
+                    Text("移出 .nomedia（让文件夹可见，图片尚未进相册）")
+                }
+                OutlinedButton(onClick = { moveInNomedia() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.VisibilityOff, null); Spacer(Modifier.width(8.dp))
+                    Text("恢复 .nomedia（重新隐藏，图片仍在相册）")
+                }
+                OutlinedButton(onClick = { createNomediaNow() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Block, null); Spacer(Modifier.width(8.dp))
+                    Text("创建 .nomedia（强制隐藏，不经过还原）")
+                }
+                OutlinedButton(onClick = { triggerScan() }, enabled = !busy && folderPath != null, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(8.dp))
+                    Text("触发系统扫描（按当前 .nomedia 状态刷新相册）")
+                }
                 OutlinedButton(onClick = { deepScan() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Layers, null); Spacer(Modifier.width(8.dp))
-                    Text("逐文件深度扫描（兜底，扫不全时用）")
+                    Text("逐文件深度扫描（兜底，目录扫描扫不全时用）")
                 }
                 TextButton(onClick = { pickFolder.launch(null) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Folder, null); Spacer(Modifier.width(8.dp)); Text("重新选择文件夹")
@@ -362,13 +441,17 @@ private fun TipCard() {
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("使用提示", style = MaterialTheme.typography.titleSmall)
-            Text("1. 进入备份模式后，请在网盘 App 里用【相册/图片自动备份】，不要用“文件夹备份”。",
+            Text("1. “进相册 / 移出相册”不是一步：先动 .nomedia，再“触发系统扫描”才生效。两个动作已拆成独立按钮。",
                 style = MaterialTheme.typography.bodySmall)
-            Text("2. 首次扫描 150G 大文件夹可能较久，进度数字会持续增长，扫完再开始备份更稳。",
+            Text("2. 想进相册：先【移出 .nomedia】，再【触发系统扫描】。（“① 进入备份模式”就是这两步合一。）",
                 style = MaterialTheme.typography.bodySmall)
-            Text("3. 备份期间这些图片会出现在系统相册、对所有 App 可见；备份完成后退出备份模式即可隐回。",
+            Text("3. 想移出相册：先【恢复 .nomedia】或【创建 .nomedia】，再【触发系统扫描】。（“② 退出备份模式”是这两步合一。）",
                 style = MaterialTheme.typography.bodySmall)
-            Text("4. 若系统扫描没扫全，用下方“逐文件深度扫描”兜底。",
+            Text("4. 进入备份模式后，请在网盘 App 里用【相册/图片自动备份】，不要用“文件夹备份”。",
+                style = MaterialTheme.typography.bodySmall)
+            Text("5. 首次扫描 150G 大文件夹可能较久，进度数字会持续增长，扫完再开始备份更稳。",
+                style = MaterialTheme.typography.bodySmall)
+            Text("6. 若系统目录扫描没扫全，用【逐文件深度扫描】兜底。",
                 style = MaterialTheme.typography.bodySmall)
         }
     }

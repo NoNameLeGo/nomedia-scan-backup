@@ -103,7 +103,8 @@ class NomediaManager(private val context: Context) {
         return createNomedia(treeUri)
     }
 
-    private fun createNomedia(treeUri: Uri): Boolean {
+    /** Create a fresh `.nomedia` at the folder root (force-hide). Public so the UI can call it directly. */
+    fun createNomedia(treeUri: Uri): Boolean {
         return try {
             val rootUri = childUri(treeUri, rootDocId(treeUri))
             val created = DocumentsContract.createDocument(
