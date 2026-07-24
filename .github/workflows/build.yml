@@ -62,9 +62,19 @@ jobs:
         run: chmod +x gradlew
         working-directory: ./android
 
-      - name: Build debug APK (installable, unsigned-release-free)
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Decode signing key
+        run: echo "$SIGNING_KEY_STORE_BASE64" | base64 -d > android/release-key.jks
+        env:
+          SIGNING_KEY_STORE_BASE64: ${{ secrets.SIGNING_KEY_STORE_BASE64 }}
+
+      - name: Build release APK (signed, overwrite-installable)
+        run: ./gradlew assembleRelease --no-daemon
         working-directory: ./android
+        env:
+          SIGNING_KEY_STORE_PATH: ${{ github.workspace }}/android/release-key.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -72,5 +82,5 @@ jobs:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           body_path: .github/release-notes.md
-          files: android/app/build/outputs/apk/debug/nomedia-backup-*-debug.apk
+          files: android/app/build/outputs/apk/release/nomedia-backup-*-release.apk
           fail_on_unmatched_files: false

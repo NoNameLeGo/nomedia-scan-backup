@@ -19,3 +19,9 @@ android/.cxx/
 
 # Agent scratch
 .cache/
+
+# 签名密钥库（仅存 GitHub Secrets，禁止提交）
+release-key.jks
+*.jks
+keystore.b64
+*.b64

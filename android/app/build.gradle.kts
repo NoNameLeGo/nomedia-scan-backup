@@ -13,8 +13,20 @@ android {
         applicationId = "com.nomedia.backup"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "beta0.0.4"
+        versionCode = 5
+        versionName = "beta0.0.5"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = System.getenv("SIGNING_KEY_STORE_PATH")
+            if (storePath != null) {
+                storeFile = file(storePath)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -25,6 +37,7 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
