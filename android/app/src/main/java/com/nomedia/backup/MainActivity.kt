@@ -138,21 +138,30 @@ private fun AppScreen() {
         indexedCount = withContext(Dispatchers.IO) { scanner.countIndexed(path) }
     }
 
+    /** After the scan is submitted, the OS indexes in the background — poll a bit longer so the count is closer to real. */
+    suspend fun waitForIndexing(maxPolls: Int = 20) {
+        repeat(maxPolls) {
+            delay(2000)
+            updateCount()
+        }
+    }
+
     fun deepScan() {
         val uri = treeUri ?: return
         busy = true; message = ""; scanState = "进行中（逐文件深度扫描）"
         val poller = pollCountWhile { busy }
         scope.launch {
-            phase = "逐文件深度扫描中 …"
+            phase = "正在深度枚举所有文件（含带 .nomedia 的子目录）…"
             val n = withContext(Dispatchers.IO) {
-                scanner.deepScanFiles(manager, uri) { p ->
+                scanner.deepScanFiles(manager, uri, respectNomedia = false) { p ->
                     phase = "深度扫描：已提交 ${p.scanned} 个文件（目录 ${p.dirsVisited}）"
                 }
             }
+            phase = "文件已提交，等待系统完成入库…"
+            waitForIndexing()
             busy = false; poller.cancel()
-            refresh()
-            scanState = "已完成（深度扫描，提交 $n 个文件）"
-            message = "深度扫描完成：共向系统提交 $n 个媒体文件。"
+            scanState = if (indexedCount >= 0) "已完成（相册已入库 $indexedCount 张）" else "已完成（提交 $n 个文件）"
+            message = "深度扫描完成：共向系统提交 $n 个媒体文件（含带 .nomedia 的子目录）。"
         }
     }
 
@@ -177,19 +186,24 @@ private fun AppScreen() {
         }
     }
 
-    /** 仅触发系统扫描（不改动 .nomedia）。图片是否“进/出相册”取决于当前 .nomedia 状态。 */
+    /** 触发系统扫描：递归枚举整棵子树并提交给 MediaScanner（不走目录级扫描，后者在 HyperOS 上不递归）。
+     *  图片是否“进/出相册”取决于当前 .nomedia 状态。 */
     fun triggerScan() {
-        val path = folderPath
-        if (path == null) { message = "无法解析真实路径，无法扫描（可能在 SD 卡或特殊目录）。"; return }
+        val uri = treeUri ?: return
         busy = true; message = ""; scanState = "进行中（系统扫描）"
         val poller = pollCountWhile { busy }
         scope.launch {
-            phase = "系统正在扫描文件夹（大文件夹可能需几十分钟，可切后台等待）…"
-            withContext(Dispatchers.IO) { scanner.scanDirectory(path) }
+            phase = "正在枚举并扫描媒体文件（大文件夹可能需数十分钟，可切后台等待）…"
+            val n = withContext(Dispatchers.IO) {
+                scanner.deepScanFiles(manager, uri, respectNomedia = true) { p ->
+                    phase = "系统扫描：已提交 ${p.scanned} 个文件（已遍历 ${p.dirsVisited} 个目录）"
+                }
+            }
+            phase = "文件已提交，等待系统完成入库…"
+            waitForIndexing()
             busy = false; poller.cancel()
-            refresh()
-            scanState = if (indexedCount >= 0) "已完成（相册已入库 $indexedCount 张）" else "已完成"
-            message = "系统扫描完成。"
+            scanState = if (indexedCount >= 0) "已完成（相册已入库 $indexedCount 张）" else "已完成（提交 $n 个文件）"
+            message = "系统扫描完成：共向系统提交 $n 个媒体文件。"
         }
     }
 
@@ -248,13 +262,13 @@ private fun AppScreen() {
 
                 // ---- 系统扫描 ----
                 Text("系统扫描", style = MaterialTheme.typography.labelLarge)
-                OutlinedButton(onClick = { triggerScan() }, enabled = !busy && folderPath != null, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { triggerScan() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(8.dp))
-                    Text("触发系统扫描（按当前开关状态刷新相册）")
+                    Text("触发系统扫描（递归扫描整棵可见子树，按开关状态刷新相册）")
                 }
                 OutlinedButton(onClick = { deepScan() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Layers, null); Spacer(Modifier.width(8.dp))
-                    Text("逐文件深度扫描（兜底，目录扫描扫不全时用）")
+                    Text("逐文件深度扫描（连带 .nomedia 的子目录一起扫，补扫更全）")
                 }
 
                 if (busy) {
@@ -363,7 +377,7 @@ private fun TipCard() {
                 style = MaterialTheme.typography.bodySmall)
             Text("5. 首次扫描 150G 大文件夹可能较久，下方“扫描状态/已入库张数”会持续更新，扫完再备份更稳。",
                 style = MaterialTheme.typography.bodySmall)
-            Text("6. 若系统目录扫描没扫全，用【逐文件深度扫描】兜底。",
+            Text("6. 若【触发系统扫描】后仍有零散图片没进相册，用【逐文件深度扫描】补扫（它会连同带 .nomedia 的子目录一起扫）。",
                 style = MaterialTheme.typography.bodySmall)
         }
     }

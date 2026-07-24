@@ -16,19 +16,18 @@ import java.util.ArrayDeque
 import kotlin.coroutines.resume
 
 /**
- * Triggers the system MediaScanner so images under a folder get (re)indexed into
- * MediaStore after `.nomedia` is removed — or removed again after it's restored.
+ * Re-indexes a folder into MediaStore by enumerating its media files via SAF and handing
+ * each real filesystem path to MediaScannerConnection in batches.
  *
- * Two strategies:
- *  - [scanDirectory]: hand the folder path to MediaScannerConnection. On modern Android
- *    (mainline MediaProvider, incl. HyperOS) this recursively walks + reconciles the tree,
- *    which correctly ADDS files (when .nomedia is gone) and REMOVES them (when it's back).
- *    This is the PRIMARY, fastest path — the OS does the recursion in native code and we
- *    only wait for one callback.
- *  - [deepScanFiles]: enumerate every media file via SAF and scan each path in batches.
- *    Slower, but a reliable fallback if the directory scan under-populates on some ROM.
- *    Enumerates with a direct ContentResolver cursor (NOT DocumentFile.listFiles()), which
- *    is the same fast technique used in the jp-media-viewer scanner.
+ * Why enumeration instead of a single directory scan: handing only a directory path to
+ * MediaScannerConnection.scanFile does NOT recursively scan subfolders on many OEM
+ * MediaProviders (incl. HyperOS) — it effectively indexes nothing under the tree. Walking
+ * the SAF tree ourselves and scanning every file path is the reliable path on every ROM.
+ *
+ * [deepScanFiles] walks the tree with a direct ContentResolver cursor (NOT
+ * DocumentFile.listFiles() — the fast technique borrowed from jp-media-viewer) and batches
+ * the paths to the scanner. `respectNomedia=true` skips subfolders that carry their own
+ * `.nomedia` (mirroring MediaStore's hiding); `false` scans everything (the catch-all).
  */
 class SystemScanner(private val context: Context) {
 
@@ -48,13 +47,6 @@ class SystemScanner(private val context: Context) {
         val dirsVisited: Int,
         val currentName: String
     )
-
-    /** Kick a recursive system scan of [dirPath]. Suspends until the scanner reports done. */
-    suspend fun scanDirectory(dirPath: String): Uri? = suspendCancellableCoroutine { cont ->
-        MediaScannerConnection.scanFile(context, arrayOf(dirPath), null) { _, uri ->
-            if (cont.isActive) cont.resume(uri)
-        }
-    }
 
     /**
      * Walk the SAF tree, collect real filesystem paths of media files, and scan them in
