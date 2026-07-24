@@ -53,56 +53,6 @@ class NomediaManager(private val context: Context) {
     private fun findChild(treeUri: Uri, name: String): Child? =
         listRootChildren(treeUri).firstOrNull { it.name == name }
 
-    fun status(treeUri: Uri): Status = try {
-        val children = listRootChildren(treeUri)
-        when {
-            children.any { it.name == NOMEDIA } -> Status.HIDDEN
-            else -> Status.VISIBLE
-        }
-    } catch (e: Exception) {
-        Status.UNKNOWN
-    }
-
-    /**
-     * Make the folder scannable: rename `.nomedia` -> `.nomedia.bak`.
-     * Returns true on success (or if already visible).
-     */
-    fun moveOut(treeUri: Uri): Boolean {
-        val nomedia = findChild(treeUri, NOMEDIA) ?: return true // already visible
-        // Clear any stale backup so rename target is free.
-        findChild(treeUri, NOMEDIA_BAK)?.let {
-            try { DocumentsContract.deleteDocument(resolver, childUri(treeUri, it.docId)) } catch (_: Exception) {}
-        }
-        return try {
-            DocumentsContract.renameDocument(resolver, childUri(treeUri, nomedia.docId), NOMEDIA_BAK)
-            findChild(treeUri, NOMEDIA) == null
-        } catch (e: Exception) {
-            // Fallback: delete outright (still reversible via re-create).
-            try {
-                DocumentsContract.deleteDocument(resolver, childUri(treeUri, nomedia.docId))
-                findChild(treeUri, NOMEDIA) == null
-            } catch (e2: Exception) {
-                false
-            }
-        }
-    }
-
-    /**
-     * Re-hide the folder: restore `.nomedia.bak` -> `.nomedia`, or create a fresh `.nomedia`.
-     * Returns true on success.
-     */
-    fun moveIn(treeUri: Uri): Boolean {
-        if (findChild(treeUri, NOMEDIA) != null) return true // already hidden
-        val bak = findChild(treeUri, NOMEDIA_BAK)
-        if (bak != null) {
-            try {
-                DocumentsContract.renameDocument(resolver, childUri(treeUri, bak.docId), NOMEDIA)
-                if (findChild(treeUri, NOMEDIA) != null) return true
-            } catch (_: Exception) { /* fall through to create */ }
-        }
-        return createNomedia(treeUri)
-    }
-
     /** Create a fresh `.nomedia` at the folder root (force-hide). Public so the UI can call it directly. */
     fun createNomedia(treeUri: Uri): Boolean {
         return try {
@@ -148,5 +98,105 @@ class NomediaManager(private val context: Context) {
             "/storage/$volume"
         }
         return if (rel.isBlank()) base else "$base/$rel"
+    }
+
+    // ---- 递归处理整棵子树里的 .nomedia（含子文件夹各自带的 .nomedia） ----
+
+    private fun parentDocId(docId: String): String {
+        val idx = docId.lastIndexOf('/')
+        return if (idx < 0) docId else docId.substring(0, idx)
+    }
+
+    /** 遍历整棵子树（只走目录、不枚举文件），收集所有名为 [name] 的文档 URI。 */
+    private fun findByName(treeUri: Uri, name: String): List<Uri> {
+        val result = mutableListOf<Uri>()
+        val queue = ArrayDeque<String>().apply { add(rootDocId(treeUri)) }
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        while (queue.isNotEmpty()) {
+            val dirId = queue.removeFirst()
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, dirId)
+            resolver.query(childrenUri, projection, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0) ?: continue
+                    val childName = c.getString(1) ?: ""
+                    val mime = c.getString(2) ?: ""
+                    if (childName == name) result.add(childUri(treeUri, id))
+                    else if (mime == DocumentsContract.Document.MIME_TYPE_DIR) queue.add(id)
+                }
+            } ?: break // 权限失效 / 异常：停止遍历，返回已收集结果
+        }
+        return result
+    }
+
+    fun findAllNomedia(treeUri: Uri): List<Uri> = findByName(treeUri, NOMEDIA)
+    fun findAllNomediaBak(treeUri: Uri): List<Uri> = findByName(treeUri, NOMEDIA_BAK)
+
+    /** 把单个 .nomedia 改名为 .nomedia.bak（同目录内先清掉残留的 .bak，避免 rename 冲突）。 */
+    private fun safeRenameToBak(treeUri: Uri, nomediaUri: Uri): Boolean {
+        val parentId = parentDocId(DocumentsContract.getDocumentId(nomediaUri))
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+        resolver.query(childrenUri,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null, null, null)?.use { c ->
+            while (c.moveToNext()) {
+                if (c.getString(1) == NOMEDIA_BAK) {
+                    try { DocumentsContract.deleteDocument(resolver, childUri(treeUri, c.getString(0))) } catch (_: Exception) {}
+                }
+            }
+        }
+        return try {
+            DocumentsContract.renameDocument(resolver, nomediaUri, NOMEDIA_BAK)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** 把单个 .nomedia.bak 还原为 .nomedia（同目录内先清掉残留的 .nomedia）。 */
+    private fun safeRenameToNomedia(treeUri: Uri, bakUri: Uri): Boolean {
+        val parentId = parentDocId(DocumentsContract.getDocumentId(bakUri))
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+        resolver.query(childrenUri,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null, null, null)?.use { c ->
+            while (c.moveToNext()) {
+                if (c.getString(1) == NOMEDIA) {
+                    try { DocumentsContract.deleteDocument(resolver, childUri(treeUri, c.getString(0))) } catch (_: Exception) {}
+                }
+            }
+        }
+        return try {
+            DocumentsContract.renameDocument(resolver, bakUri, NOMEDIA)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /** 让整棵子树可见：把所有 .nomedia（含子文件夹）改名为 .nomedia.bak。返回处理的数量。 */
+    fun setVisible(treeUri: Uri): Int {
+        var count = 0
+        for (uri in findAllNomedia(treeUri)) {
+            if (safeRenameToBak(treeUri, uri)) count++
+        }
+        return count
+    }
+
+    /** 让整棵子树隐藏：把所有 .nomedia.bak 还原为 .nomedia；若整树原本没有任何 .nomedia，则在根目录补建一个。返回处理的数量。 */
+    fun setHidden(treeUri: Uri): Int {
+        var count = 0
+        for (uri in findAllNomediaBak(treeUri)) {
+            if (safeRenameToNomedia(treeUri, uri)) count++
+        }
+        if (findAllNomedia(treeUri).isEmpty()) {
+            if (createNomedia(treeUri)) count++
+        }
+        return count
+    }
+
+    /** 整棵子树状态：任意目录含 .nomedia 即视为 HIDDEN。返回 (状态, .nomedia 数量)。 */
+    fun statusAll(treeUri: Uri): Pair<Status, Int> {
+        val all = findAllNomedia(treeUri)
+        return (if (all.isNotEmpty()) Status.HIDDEN else Status.VISIBLE) to all.size
     }
 }

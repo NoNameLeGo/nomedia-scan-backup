@@ -78,6 +78,7 @@ private fun AppScreen() {
 
     var treeUri by remember { mutableStateOf(loadSavedTree(context)) }
     var status by remember { mutableStateOf(NomediaManager.Status.UNKNOWN) }
+    var nomediaCount by remember { mutableStateOf(0) }
     var folderName by remember { mutableStateOf("") }
     var folderPath by remember { mutableStateOf<String?>(null) }
 
@@ -97,10 +98,10 @@ private fun AppScreen() {
     fun refresh() {
         treeUri?.let { uri ->
             scope.launch {
-                val s = withContext(Dispatchers.IO) { manager.status(uri) }
+                val (s, cnt) = withContext(Dispatchers.IO) { manager.statusAll(uri) }
                 val name = manager.displayName(uri)
                 val path = manager.realPath(uri)
-                status = s; folderName = name; folderPath = path
+                status = s; nomediaCount = cnt; folderName = name; folderPath = path
                 updateCount()
             }
         }
@@ -167,22 +168,23 @@ private fun AppScreen() {
 
     // ---- .nomedia 状态开关：开=有 .nomedia（隐藏），关=无（可见） ----
 
-    /** hidden=true 建立/恢复 .nomedia（隐藏）；false 移出（可见）。 */
+    /** hidden=true 隐藏整棵子树（恢复/创建所有 .nomedia）；false 可见（移出所有 .nomedia）。 */
     fun toggleNomedia(hidden: Boolean) {
         val uri = treeUri ?: return
         busy = true; message = ""; scanState = "未触发"
         scope.launch {
-            phase = if (hidden) "正在建立 .nomedia …" else "正在移出 .nomedia …"
-            val ok = withContext(Dispatchers.IO) {
-                if (hidden) manager.moveIn(uri) else manager.moveOut(uri)
+            phase = if (hidden) "正在恢复整棵子树的 .nomedia …" else "正在移出整棵子树的 .nomedia …"
+            val n = withContext(Dispatchers.IO) {
+                if (hidden) manager.setHidden(uri) else manager.setVisible(uri)
             }
+            val (s, cnt) = withContext(Dispatchers.IO) { manager.statusAll(uri) }
             busy = false
-            status = manager.status(uri)
-            message = if (ok) {
-                if (hidden) "已隐藏（有 .nomedia）。点【触发系统扫描】让图片移出相册。"
-                else "已可见（无 .nomedia）。点【触发系统扫描】让图片进相册。"
-            } else "操作失败，请检查文件夹授权。"
-            refresh()
+            status = s; nomediaCount = cnt
+            message = if (n > 0) {
+                if (hidden) "已隐藏 $n 个 .nomedia（含子文件夹）。点【触发系统扫描】让图片移出相册。"
+                else "已移出 $n 个 .nomedia（含子文件夹）。点【触发系统扫描】让图片进相册。"
+            } else "没有发现需要处理的 .nomedia（文件夹本就可见/已隐藏）。"
+            updateCount()
         }
     }
 
@@ -225,7 +227,7 @@ private fun AppScreen() {
                     Icon(Icons.Filled.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("选择要备份的文件夹")
                 }
             } else {
-                FolderCard(folderName, folderPath, status, indexedCount, hasMediaPerm)
+                FolderCard(folderName, folderPath, status, nomediaCount, indexedCount, hasMediaPerm)
 
                 if (!hasMediaPerm) {
                     OutlinedButton(onClick = {
@@ -249,10 +251,10 @@ private fun AppScreen() {
                         Icon(if (hidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, null)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(".nomedia 隐藏开关", style = MaterialTheme.typography.titleMedium)
+                            Text(".nomedia 隐藏开关（含所有子文件夹）", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                if (hidden) "开：有 .nomedia，文件夹已隐藏（不进相册）"
-                                else "关：无 .nomedia，文件夹可见（进相册）",
+                                if (hidden) "开：整棵子树有 .nomedia，已隐藏（不进相册）"
+                                else "关：整棵子树无 .nomedia，可见（进相册）",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -326,7 +328,7 @@ private fun IntroCard() {
 
 @Composable
 private fun FolderCard(
-    name: String, path: String?, status: NomediaManager.Status, indexed: Int, hasPerm: Boolean
+    name: String, path: String?, status: NomediaManager.Status, nomediaCount: Int, indexed: Int, hasPerm: Boolean
 ) {
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -345,7 +347,7 @@ private fun FolderCard(
             }
             Spacer(Modifier.height(2.dp))
             val (label, color) = when (status) {
-                NomediaManager.Status.HIDDEN -> "当前：已隐藏（含 .nomedia）" to MaterialTheme.colorScheme.tertiary
+                NomediaManager.Status.HIDDEN -> "当前：已隐藏（含 $nomediaCount 个 .nomedia，含子文件夹）" to MaterialTheme.colorScheme.tertiary
                 NomediaManager.Status.VISIBLE -> "当前：可见（无 .nomedia）" to MaterialTheme.colorScheme.primary
                 NomediaManager.Status.UNKNOWN -> "状态未知" to MaterialTheme.colorScheme.error
             }
@@ -367,13 +369,13 @@ private fun TipCard() {
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("使用提示", style = MaterialTheme.typography.titleSmall)
-            Text("1. 上方是一个状态开关：开=有 .nomedia（隐藏），关=无（可见）。拨动即切换。",
+            Text("1. 上方是一个状态开关：开=整棵子树有 .nomedia（隐藏），关=无（可见）。拨动即切换，会同时处理根目录和所有子文件夹里的 .nomedia。",
                 style = MaterialTheme.typography.bodySmall)
             Text("2. 开关只改变 .nomedia 状态，要让图片真正“进/出相册”，还需点【触发系统扫描】。",
                 style = MaterialTheme.typography.bodySmall)
             Text("3. 想进相册：关掉开关 → 触发系统扫描。想移出相册：打开开关 → 触发系统扫描。",
                 style = MaterialTheme.typography.bodySmall)
-            Text("4. 进入（可见）状态后，请在网盘 App 里用【相册/图片自动备份】，不要用“文件夹备份”。",
+            Text("4. 扫描会递归整棵子树：每个子文件夹的图片都会一并被系统索引。",
                 style = MaterialTheme.typography.bodySmall)
             Text("5. 首次扫描 150G 大文件夹可能较久，下方“扫描状态/已入库张数”会持续更新，扫完再备份更稳。",
                 style = MaterialTheme.typography.bodySmall)
