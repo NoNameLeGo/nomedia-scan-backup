@@ -13,8 +13,8 @@ android {
         applicationId = "com.nomedia.backup"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "beta0.0.5"
+        versionCode = 6
+        versionName = "beta0.0.6"
     }
 
     signingConfigs {
