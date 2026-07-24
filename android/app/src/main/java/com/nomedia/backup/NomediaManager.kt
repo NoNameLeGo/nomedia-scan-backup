@@ -109,7 +109,7 @@ class NomediaManager(private val context: Context) {
             findChild(treeUri, NOMEDIA) == null
         } catch (e: Exception) {
             try {
-                DocumentsContract.deleteDocument(resolver, childUri, nomedia.first)
+                DocumentsContract.deleteDocument(resolver, childUri(treeUri, nomedia.first))
                 findChild(treeUri, NOMEDIA) == null
             } catch (e2: Exception) { false }
         }
