@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="380" viewBox="0 0 1200 380"
+     role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">扫库备份助手 — nomedia-scan-backup</title>
+  <desc id="hero-desc">Android 小工具：临时移走大文件夹的 .nomedia 并触发系统媒体扫描，让图片进入相册以便网盘备份；备份完一键恢复隐藏。纯 SAF，无需 Root。</desc>
+
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1200" y2="380">
+      <stop offset="0%" stop-color="#0D1117"/>
+      <stop offset="100%" stop-color="#161B22"/>
+    </linearGradient>
+    <linearGradient id="greenGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3FB950" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#2EA043" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="greenBorder" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3FB950"/>
+      <stop offset="100%" stop-color="#2EA043"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="380" rx="16" fill="url(#bgGrad)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="0.035">
+    <line x1="0" y1="100" x2="1200" y2="100" stroke="#8B949E" stroke-width="0.5"/>
+    <line x1="0" y1="200" x2="1200" y2="200" stroke="#8B949E" stroke-width="0.5"/>
+    <line x1="0" y1="300" x2="1200" y2="300" stroke="#8B949E" stroke-width="0.5"/>
+    <line x1="400" y1="0" x2="400" y2="380" stroke="#8B949E" stroke-width="0.5"/>
+    <line x1="800" y1="0" x2="800" y2="380" stroke="#8B949E" stroke-width="0.5"/>
+  </g>
+
+  <!-- ===== LEFT: Title & Info ===== -->
+  <g transform="translate(56, 36)">
+
+    <!-- Android Pill -->
+    <rect x="0" y="0" width="100" height="28" rx="14" fill="#21262D"/>
+    <rect x="4" y="4" width="20" height="20" rx="4" fill="#3FB950" opacity="0.2"/>
+    <text x="30" y="19" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#8B949E" font-weight="600" letter-spacing="0.5">ANDROID 工具</text>
+
+    <!-- Project Name -->
+    <text x="0" y="90" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="56" fill="#E6EDF3" font-weight="800" letter-spacing="-1">扫库备份助手</text>
+
+    <!-- English name -->
+    <text x="0" y="118" font-family="ui-monospace, SFMono-Regular, monospace" font-size="18" fill="#8B949E">nomedia-scan-backup</text>
+
+    <!-- Description -->
+    <text x="0" y="168" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="20" fill="#C9D1D9">把 .nomedia 挡住的超大图片文件夹临时"放出来"</text>
+    <text x="0" y="198" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="20" fill="#C9D1D9">用网盘相册自动备份通道稳定上传，备份完一键恢复隐藏。</text>
+
+    <!-- Badge Row -->
+    <g transform="translate(0, 240)">
+      <!-- Kotlin -->
+      <rect x="0" y="0" width="78" height="30" rx="6" fill="#21262D" stroke="#30363D" stroke-width="0.5"/>
+      <polygon points="8,15 12,10 16,15 12,20" fill="#C9D1D9" opacity="0.5"/>
+      <text x="24" y="20" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#C9D1D9">Kotlin</text>
+
+      <!-- SAF -->
+      <rect x="90" y="0" width="66" height="30" rx="6" fill="#21262D" stroke="#30363D" stroke-width="0.5"/>
+      <circle cx="104" cy="15" r="4" fill="#58A6FF"/>
+      <text x="114" y="20" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#C9D1D9">SAF</text>
+
+      <!-- No Root -->
+      <rect x="168" y="0" width="100" height="30" rx="6" fill="#21262D" stroke="#30363D" stroke-width="0.5"/>
+      <circle cx="182" cy="15" r="4" fill="#D2A8FF"/>
+      <text x="192" y="20" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#C9D1D9">No Root</text>
+
+      <!-- Compose -->
+      <rect x="280" y="0" width="96" height="30" rx="6" fill="#21262D" stroke="#30363D" stroke-width="0.5"/>
+      <circle cx="294" cy="15" r="4" fill="#FFA657"/>
+      <text x="304" y="20" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#C9D1D9">Compose</text>
+
+      <!-- minSdk 26 -->
+      <rect x="388" y="0" width="110" height="30" rx="6" fill="#21262D" stroke="#30363D" stroke-width="0.5"/>
+      <circle cx="402" cy="15" r="4" fill="#7EE787"/>
+      <text x="412" y="20" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" fill="#C9D1D9">minSdk 26</text>
+    </g>
+  </g>
+
+  <!-- ===== RIGHT: Workflow Diagram ===== -->
+  <g transform="translate(670, 30)">
+
+    <!-- Section label -->
+    <text x="0" y="22" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="13" fill="#484F58" font-weight="600" letter-spacing="1">CORE FLOW</text>
+
+    <!-- Phase 1: Hidden -->
+    <g transform="translate(0, 50)">
+      <rect x="0" y="0" width="230" height="66" rx="10" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+      <rect x="0" y="0" width="5" height="66" rx="3" fill="#30363D"/>
+      <text x="24" y="26" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="14" fill="#8B949E" font-weight="600">① 隐藏状态</text>
+      <text x="24" y="48" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="12" fill="#484F58">.nomedia 挡着，相册看不见</text>
+    </g>
+
+    <!-- Down arrow -->
+    <path d="M 115 120 L 115 140" stroke="#30363D" stroke-width="2" fill="none"/>
+    <polygon points="115,143 109,135 121,135" fill="#30363D"/>
+    <text x="125" y="135" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="10" fill="#484F58">一键</text>
+
+    <!-- Phase 2: Backup Mode (highlighted) -->
+    <g transform="translate(0, 150)">
+      <rect x="0" y="0" width="230" height="86" rx="10" fill="#0D2818" stroke="#3FB950" stroke-width="1.5"/>
+      <rect x="0" y="0" width="5" height="86" rx="3" fill="#3FB950"/>
+      <text x="24" y="26" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="14" fill="#7EE787" font-weight="600">② 备份模式 🟢</text>
+      <text x="24" y="48" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="12" fill="#3FB950">移走 .nomedia → 触发系统扫描</text>
+      <text x="24" y="68" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="12" fill="#3FB950">图片进入 MediaStore（相册）</text>
+    </g>
+
+    <!-- Down arrow -->
+    <path d="M 115 240 L 115 260" stroke="#30363D" stroke-width="2" fill="none"/>
+    <polygon points="115,263 109,255 121,255" fill="#30363D"/>
+    <text x="125" y="255" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="10" fill="#484F58">备份完</text>
+
+    <!-- Phase 3: Cloud Backup -->
+    <g transform="translate(0, 270)">
+      <rect x="0" y="0" width="230" height="66" rx="10" fill="#161B22" stroke="#30363D" stroke-width="1"/>
+      <rect x="0" y="0" width="5" height="66" rx="3" fill="#30363D"/>
+      <text x="24" y="26" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="14" fill="#8B949E" font-weight="600">③ 网盘自动备份</text>
+      <text x="24" y="48" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="12" fill="#484F58">相册通道增量上传，可靠可续传</text>
+    </g>
+
+    <!-- Restore loop arrow on the right -->
+    <path d="M 260 303 L 280 303 L 280 83 L 260 83" stroke="#30363D" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+    <polygon points="257,83 265,77 265,89" fill="#30363D"/>
+    <text x="283" y="200" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="11" fill="#484F58" writing-mode="tb">备份完 — 键恢复 .nomedia</text>
+
+    <!-- SAF badge -->
+    <g transform="translate(0, 355)">
+      <rect x="0" y="0" width="230" height="24" rx="12" fill="#0D419D" opacity="0.3"/>
+      <text x="115" y="17" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif" font-size="11" fill="#58A6FF">⚡ 纯 SAF 文件夹授权 · 无需所有文件访问</text>
+    </g>
+
+  </g>
+
+</svg>
